@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-marketplace.json",
+  "name": "claudeguard-integrity",
+  "description": "ClaudeGuard Integrity — a deterministic integrity gate over already-merged code. Sibling of ClaudeGuard, which judges a diff before merge; this one checks the whole tree after it, with no model in the decision path.",
+  "owner": {
+    "name": "Beeman",
+    "email": "beeman8990@gmail.com"
+  },
+  "plugins": [
+    {
+      "name": "claudeguard-integrity",
+      "source": "./",
+      "description": "Deterministic integrity gate over already-merged code — AST purity closures, file invariants and a byte-level source-encoding scan.",
+      "category": "code-quality"
+    }
+  ]
+}

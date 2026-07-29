@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "claudeguard-integrity",
+  "displayName": "ClaudeGuard Integrity",
+  "version": "0.1.0",
+  "description": "Deterministic integrity gate over already-merged code: AST purity closures, file invariants, and a byte-level source-encoding scan. No model in the decision path. Report-only — never edits files.",
+  "author": {
+    "name": "Beeman",
+    "email": "beeman8990@gmail.com"
+  },
+  "homepage": "https://github.com/beemann/claudeguard-integrity",
+  "repository": "https://github.com/beemann/claudeguard-integrity",
+  "license": "MIT",
+  "keywords": [
+    "integrity",
+    "ast",
+    "static-analysis",
+    "gate",
+    "ci",
+    "post-merge",
+    "claude-code",
+    "claude-skill"
+  ],
+  "skills": ["./"]
+}

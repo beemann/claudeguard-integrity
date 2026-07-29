@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  // SELF-CONTAINED ON PURPOSE (decision #143). This config does NOT extend the
+  // repo's tsconfig.base.json: Phase B lifts this directory into its own public
+  // repository, and a config that inherits from a parent two levels up breaks the
+  // moment the folder moves. The options below are the repo base plus the one
+  // local addition (`esModuleInterop`), copied rather than referenced so the
+  // engine type-checks identically inside a host monorepo and standalone.
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "Preserve",
+    "moduleResolution": "bundler",
+    "lib": ["ESNext"],
+    "types": ["bun"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "resolveJsonModule": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    // The TypeScript compiler API ships as a CJS `export =` module; a clean
+    // `import ts from "typescript"` needs interop.
+    "esModuleInterop": true
+  },
+  // `*.ts` picks up the config modules at the package root (`integrity.config.*.ts`).
+  // They are shipped examples, so a type error in one is a broken example.
+  "include": ["src/**/*.ts", "test/**/*.ts", "*.ts"]
+}

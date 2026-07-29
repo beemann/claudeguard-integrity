@@ -1,0 +1,8 @@
+# Normalise line endings. A tool whose whole point is that invisible bytes matter
+# should not let the checkout platform decide what its own source looks like.
+* text=auto eol=lf
+
+# Never touched as text.
+*.png binary
+*.jpg binary
+*.woff2 binary

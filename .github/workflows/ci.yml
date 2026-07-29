@@ -1,0 +1,41 @@
+name: CI
+
+# Lives at the package root so it becomes the repository's workflow once this
+# directory is lifted into its own repo.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A public repo runs a fork's code on `pull_request`. Nothing here needs to write,
+# so nothing here may: state it rather than inheriting whatever the repo default is.
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # This workflow only ever runs in the standalone repository, where the package
+      # carries its own `bun.lock` — so the install is frozen. Inside a host monorepo
+      # the file is inert: GitHub reads workflows from the repository root only.
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bunx tsc --noEmit
+
+      - name: Test
+        run: bun test test/
+
+      # Dogfood: the gate over its own source. A tool that exists because invisible
+      # characters defeat review must not ship any of its own.
+      - name: Integrity gate (self)
+        run: bun run src/cli.ts --config integrity.config.self.ts --root .

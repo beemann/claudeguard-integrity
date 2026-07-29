@@ -1,0 +1,42 @@
+{
+  "name": "@claudeguard/integrity",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "description": "Deterministic integrity gate over merged code (sibling of ClaudeGuard): AST checks plus a byte-level source-encoding check, no model in the decision path. Rules are injected via a private config; `private` stays true until published.",
+  "bin": {
+    "claudeguard-integrity": "src/cli.ts"
+  },
+  "scripts": {
+    "check": "bun run src/cli.ts",
+    "mcp": "bun run src/mcp.ts",
+    "test": "bun test test/",
+    "typecheck": "tsc --noEmit",
+    "check:self": "bun run src/cli.ts --config integrity.config.self.ts --root ."
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "typescript": "^5.7.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "files": [
+    "src",
+    "SKILL.md",
+    "README.md",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "LICENSE",
+    "integrity.config.example.ts"
+  ],
+  "keywords": [
+    "static-analysis",
+    "ast",
+    "integrity",
+    "gate",
+    "ci",
+    "mcp"
+  ]
+}

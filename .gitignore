@@ -1,0 +1,5 @@
+node_modules/
+*.log
+.DS_Store
+# A user's own resolved config — the example and the self-check stay tracked.
+integrity.config.ts
