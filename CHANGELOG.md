@@ -32,6 +32,12 @@ months before extraction; every check below exists because something got through
   checking. The count is the only thing that tells a passing check from an absent one.
 - **`test/lift-readiness.test.ts`** — asserts the package stays self-contained and free
   of host-project rule names, so the boundary is a test rather than a promise.
+- **The engine's own determinism is a check, not a claim.** `integrity.config.self.ts`
+  runs the gate over this package in CI with an `engine-determinism` closure across
+  both entry points: no clock, no entropy, no network, no timers anywhere they can
+  reach. File reads stay allowed — reading the judged tree is input, not a side
+  channel. Falsified before shipping: a `Date.now()` seeded three modules below an
+  entry point fails the run.
 
 ### Security
 

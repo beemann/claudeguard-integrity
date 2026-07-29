@@ -197,6 +197,14 @@ the verdict rather than trusting "OK" on its own.
    findings on any machine. There is no write path: a gate that can fix what it judges
    is no longer a gate.
 
+Rule 3 is **checked, not asserted**. `integrity.config.self.ts` holds an
+`engine-determinism` closure over both entry points, forbidding clocks, entropy,
+network and timers across everything they can reach — file reads stay allowed, because
+reading the tree under judgement is this program's input rather than a side channel.
+Seeding a `Date.now()` three modules deep fails the run. A tool built on the premise
+that invariants must be checked rather than promised has no business holding its own
+as a promise.
+
 ## Tests
 
 ```bash
