@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "claudeguard-integrity",
   "displayName": "ClaudeGuard Integrity",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Deterministic integrity gate over already-merged code: AST purity closures, file invariants, and a byte-level source-encoding scan. No model in the decision path. Report-only — never edits files.",
   "author": {
     "name": "Beeman",

@@ -25,11 +25,20 @@ import type { Finding, RunResult } from "./types";
  * check apart from an absent one, so it travels with every verdict, in every surface.
  */
 export function summaryLines(result: RunResult): string[] {
-  return result.results.map(
-    (check) =>
+  return result.results.map((check) => {
+    const skipped = (check.skipped ?? [])
+      .map((entry) => `${String(entry.count)} ${entry.reason}`)
+      .join(", ");
+    // Skips travel with the count for the same reason the count travels with the
+    // verdict (#182): a file the check declined to read is a fact the operator gets
+    // to see. "Scanned 388, said nothing about 144" is how a gate reads green while
+    // being blind, so there is nowhere in this output for a silent skip to live.
+    return (
       `${check.checkId}: ${String(check.filesScanned)} file(s) scanned, ` +
-      `${String(check.findings.length)} finding(s)`,
-  );
+      `${String(check.findings.length)} finding(s)` +
+      (skipped === "" ? "" : ` [not read: ${skipped}]`)
+    );
+  });
 }
 
 /** A single finding, with enough evidence to locate it without re-running anything. */

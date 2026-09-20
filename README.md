@@ -35,9 +35,49 @@ comment, and the regex is happy. This check reads code, not prose.
 
 ### `source-encoding` — "nothing here is invisible to the reviewer"
 
-A byte scan for characters a human cannot see but a machine acts on: C0 controls
-including NUL, bidi overrides and isolates, zero-width characters, the BOM. Tab,
-newline and carriage return are fine — they show up in a diff.
+A byte scan for characters a human cannot see but a machine acts on. Coverage is
+**derived from the runtime's Unicode tables**, not from a list of blocks: the control,
+format and separator categories plus `Default_Ignorable_Code_Point` — the property
+that means "a renderer draws nothing here". That covers NUL and the C1 controls, bidi
+overrides, isolates and marks, zero-width characters and the invisible operators next
+to them, the BOM, invisible line separators, Hangul fillers, the Tags plane and the
+variation selectors.
+
+Tab, newline and carriage return are fine — they show up in a diff. So are `U+FE0E`
+and `U+FE0F`, the presentation selectors, because without them the gate cries over
+every emoji in a README and gets switched off; the other fourteen selectors are a
+documented smuggling alphabet and are not allowed. Anything else invisible in source
+gets written as an escape.
+
+**The file set is derived too.** The rule reads every file under its roots — there is
+no `extensions` allow-list, because an opt-in list is where a payload hides. Measured
+on the project this engine came from, an extension list left 144 of 532 tracked files
+unread, eleven of them executable: the git hooks that run on every push, the
+Dockerfile, the hardware-signing example scripts, and the shell runner of this very
+gate. The only reasons the rule may decline to read a file are declared and **counted
+in its report**:
+
+- a declared binary extension (an *undeclared* binary is read and fails loudly);
+- an excluded directory, reported by path, since exclusions match by name at any depth;
+- a symlink, which is reported rather than followed.
+
+It does not ask git which files are binary: git calls a file binary precisely when it
+holds a NUL, which is the symptom being hunted.
+
+Invalid UTF-8 is a finding, not a pass — malformed bytes decode to `U+FFFD`, a
+perfectly visible character, so every file is compared against a re-encode of its own
+decoding.
+
+A rule may tolerate extra code points per extension with `allowancesByExtension`
+(e.g. `{ ".md": [0x00ad] }` — prose hyphenates, code does not). The mechanism is
+bounded: an allowance for a control, bidi control, line separator, tag character or
+variation selector is **refused as a finding**, so the escape hatch cannot be widened
+into a door. `dataPaths` reduces the rule for attack fixtures whose content *is* the
+sample — still read, still counted, still forbidden from holding a control character.
+
+The list-based version of this check missed 3802 code points Unicode marks invisible
+(decision #181) and could not see 27 % of the tree (decision #182). Both times the
+hole was not a missing entry — it was the list.
 
 This one exists because of a specific defect. A raw NUL byte inside a template
 literal passed lint, passed the formatter, passed `tsc`, passed the entire test suite,
@@ -155,7 +195,8 @@ Output names the count before the verdict:
 
 ```
   decide-stays-pure: 12 file(s) scanned, 0 finding(s)
-  no-invisible-characters: 344 file(s) scanned, 0 finding(s)
+  no-invisible-characters: 544 file(s) scanned, 0 finding(s) [not read: 15 declared
+    binary extension, 12 excluded directory, 67 read as declared attack/trace data]
 claudeguard-integrity: OK — no findings across 2 check(s).
 ```
 

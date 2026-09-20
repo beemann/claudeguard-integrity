@@ -49,9 +49,19 @@ const config: IntegrityConfig = {
    */
   sourceEncoding: [
     {
+      // One rule, and NO `extensions` list — it reads every file under the root and
+      // reports anything it declined to read. An opt-in list is where a payload hides:
+      // measured on the host project, an extension list left 144 of 532 files unread,
+      // eleven of them executable (#182).
       id: "no-invisible-characters",
-      roots: ["src", "test"],
-      extensions: [".ts", ".tsx", ".json", ".md"],
+      roots: ["."],
+      // A soft hyphen is legitimate typography in prose, and a project whose gate
+      // cries over its own README turns the gate off. Code gets no allowance, and the
+      // check refuses one for any control, bidi, tag or variation-selector code point.
+      allowancesByExtension: { ".md": [0x00ad] },
+      // Fixtures whose content IS the attack sample. Still read and counted, under a
+      // reduced rule: no control characters, valid UTF-8.
+      dataPaths: ["test/fixtures/corpus/"],
     },
   ],
 };

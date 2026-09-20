@@ -117,17 +117,63 @@ export interface SourceEncodingRule {
   readonly id: string;
   /** Repo-relative directories to walk. `["."]` means the whole repo. */
   readonly roots: readonly string[];
-  /** File extensions to scan, including the dot (e.g. `".ts"`). */
-  readonly extensions: readonly string[];
+  /**
+   * DEPRECATED (decision #182) — an opt-in extension list is a place to hide. When
+   * set, the rule still honours it, but it also reports how many files under its
+   * roots it left unread, because a narrowed scan must not be able to read as a
+   * clean one. Omit it and the rule reads every file that is not declared binary.
+   */
+  readonly extensions?: readonly string[];
+  /**
+   * Extensions whose content is not reviewable text and is therefore skipped —
+   * images, fonts, archives, compiled output. Defaults to
+   * {@link DEFAULT_BINARY_EXTENSIONS}. Skips are COUNTED and reported: a file the
+   * gate did not read is a fact the operator gets to see, never a silence.
+   *
+   * A binary file with an undeclared extension is read and fails loudly. That is
+   * deliberate — an undeclared binary is exactly where a payload would sit.
+   */
+  readonly binaryExtensions?: readonly string[];
+  /**
+   * Repo-relative path prefixes holding attack or trace FIXTURES — data whose whole
+   * point is to carry the real bytes of an attack (a concealment corpus, a captured
+   * transcript). Files under these paths are still read and counted, under a reduced
+   * rule: control characters and invalid UTF-8 are still forbidden, because a fixture
+   * that git treats as binary is as unreviewable as any other file, but the
+   * concealment alphabet itself is allowed — it is the sample.
+   *
+   * The reduction applies only to inert data extensions
+   * ({@link DEFAULT_DATA_EXTENSIONS}); a script or source file under one of these
+   * paths gets the full rule, so "hide it in the corpus" is not a route.
+   */
+  readonly dataPaths?: readonly string[];
   /**
    * Directory names skipped during the walk. Defaults to
    * {@link DEFAULT_EXCLUDED_DIRS} — dependency and build output, which a project
    * neither authors nor reviews.
    */
   readonly excludeDirs?: readonly string[];
+  /**
+   * Extra code points tolerated in files of a given extension, on top of tab/LF/CR
+   * and the presentation selectors the check always allows — e.g.
+   * `{ ".md": [0x00ad] }`, because prose may legitimately hyphenate and code may not
+   * (decisions #181/#182).
+   *
+   * Bounded by construction: an allowance is REFUSED, as a finding, for any code
+   * point in the hard families — controls, bidi controls, line separators, tag
+   * characters and variation selectors. Those have no legitimate authored use at any
+   * extension, so no config can talk its way into them. There is also no way to
+   * allow a RANGE; each code point is listed and therefore reviewed.
+   */
+  readonly allowancesByExtension?: Readonly<Record<string, readonly number[]>>;
 }
 
-/** Directory names never walked: not authored here, not reviewed here. */
+/**
+ * Directory names never walked: not authored here, not reviewed here. Matched by
+ * NAME at any depth, which is what a monorepo needs (`packages/<name>/node_modules`), and
+ * which is also why every skipped directory is reported — a source directory that
+ * happens to be called `build` would otherwise go unread in silence (decision #182).
+ */
 export const DEFAULT_EXCLUDED_DIRS: readonly string[] = [
   "node_modules",
   ".git",
@@ -136,6 +182,69 @@ export const DEFAULT_EXCLUDED_DIRS: readonly string[] = [
   "coverage",
   ".next",
   "out",
+];
+
+/**
+ * Extensions whose bytes are not reviewable text. Skipping these is the ONLY reason
+ * the check declines to read a file, and it says so in its report.
+ */
+export const DEFAULT_BINARY_EXTENSIONS: readonly string[] = [
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".gif",
+  ".webp",
+  ".avif",
+  ".bmp",
+  ".ico",
+  ".svgz",
+  ".pdf",
+  ".woff",
+  ".woff2",
+  ".ttf",
+  ".otf",
+  ".eot",
+  ".zip",
+  ".gz",
+  ".tgz",
+  ".bz2",
+  ".xz",
+  ".7z",
+  ".rar",
+  ".jar",
+  ".wasm",
+  ".node",
+  ".so",
+  ".dylib",
+  ".dll",
+  ".exe",
+  ".bin",
+  ".class",
+  ".pyc",
+  ".db",
+  ".sqlite",
+  ".sqlite3",
+  ".mp3",
+  ".mp4",
+  ".wav",
+  ".ogg",
+  ".webm",
+  ".mov",
+  ".avi",
+];
+
+/**
+ * Inert data extensions: the only files a {@link SourceEncodingRule.dataPaths} entry
+ * may reduce the rule for. Anything executable or compilable under a data path keeps
+ * the full rule.
+ */
+export const DEFAULT_DATA_EXTENSIONS: readonly string[] = [
+  ".txt",
+  ".jsonl",
+  ".csv",
+  ".tsv",
+  ".log",
+  ".eml",
 ];
 
 /** The parametric config an integrated project injects (build brief §4.2). */
@@ -153,6 +262,13 @@ export interface CheckResult {
   readonly findings: readonly Finding[];
   /** How many within-repo files this check actually parsed — the non-inert proof. */
   readonly filesScanned: number;
+  /**
+   * How many files and directories the check declined to read, and why, one entry per
+   * reason (e.g. `"binary extension"`, `"excluded directory"`). A check that skips
+   * without saying so can report green for the very thing it did not look at, so
+   * every surface prints this next to `filesScanned` (decision #182).
+   */
+  readonly skipped?: readonly { readonly reason: string; readonly count: number }[];
 }
 
 /** A check bound to its config, ready to run against a repo root. */

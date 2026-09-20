@@ -45,12 +45,13 @@ a run, that is the gate working, not a limitation.
 
 ## Reading the output
 
-Each check reports **how many files it scanned**, and that number matters as much as
-the verdict:
+Each check reports **how many files it scanned and what it did not read**, and those
+numbers matter as much as the verdict:
 
 ```
   decide-stays-pure: 12 file(s) scanned, 0 finding(s)
-  no-invisible-characters: 344 file(s) scanned, 0 finding(s)
+  no-invisible-characters: 544 file(s) scanned, 0 finding(s) [not read: 15 declared
+    binary extension, 12 excluded directory, 67 read as declared attack/trace data]
 ```
 
 **A check that scanned nothing is not a check that passed.** A rule pointed at a
@@ -73,11 +74,28 @@ A finding names the file, the line, the check and the exact token:
 - **`file-invariants`** — literals that must exist in one file, literals that must
   never appear, members that must never be referenced. Matched over **AST nodes
   only**, so a comment mentioning the token neither satisfies nor trips it.
-- **`source-encoding`** — no source file may hold a character invisible to a
-  reviewer: C0 controls (incl. NUL), bidi overrides, zero-width, BOM. The only
-  non-AST check, and the reason it exists is that a raw NUL byte once passed lint,
-  prettier, `tsc`, a full test suite and an LLM diff gate — while making `git` treat
-  the file as binary, i.e. removing the review surface entirely.
+- **`source-encoding`** — no file may hold a character invisible to a reviewer. Both
+  halves of the rule are **derived, not enumerated**, because both times the hole was
+  the list itself:
+  - *which characters* — the runtime's Unicode tables (control, format and separator
+    categories plus `Default_Ignorable_Code_Point`). The block list it replaced missed
+    3802 invisible code points. Allowed: tab, newline, carriage return, and the
+    `U+FE0E`/`U+FE0F` presentation selectors.
+  - *which files* — every file under the roots, with no `extensions` allow-list. On the
+    project this engine came from, that list had left 144 of 532 tracked files unread,
+    eleven of them executable, including the git hooks and the gate's own runner.
+    Declared binary extensions, excluded directories and symlinks are the only
+    declines, and each is **counted in the report**. Invalid UTF-8 is a finding: a
+    malformed byte decodes to a visible `U+FFFD`, so a scan that trusts the decode can
+    be walked straight past.
+  - *exceptions are bounded* — `allowancesByExtension` lets prose keep its soft hyphen,
+    but an allowance for a control, bidi, tag or variation-selector code point is
+    refused as a finding. `dataPaths` reduces the rule for fixtures whose content *is*
+    an attack sample, never for a script under them.
+
+  The only non-AST check, and the reason it exists is that a raw NUL byte once passed
+  lint, prettier, `tsc`, a full test suite and an LLM diff gate — while making `git`
+  treat the file as binary, i.e. removing the review surface entirely.
 
 ## When to reach for it unprompted
 

@@ -69,9 +69,13 @@ const config: IntegrityConfig = {
    */
   sourceEncoding: [
     {
+      // No `extensions` list: the engine reads every file in its own tree (#182). A
+      // tool whose own gate was opt-in could not credibly tell a project that opt-in
+      // lists are where payloads hide. No allowance either — not even the prose one a
+      // host project may need, because this tree's prose is the tool's own docs and can
+      // simply be written with escapes.
       id: "no-invisible-characters",
       roots: ["."],
-      extensions: [".ts", ".json", ".md", ".yml"],
     },
   ],
 };
