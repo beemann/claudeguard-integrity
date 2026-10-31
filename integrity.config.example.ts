@@ -1,4 +1,4 @@
-import { FORBIDDEN_NONDETERMINISM } from "./src/tokens";
+import { FORBIDDEN_NONDETERMINISM, PURE_SURFACE } from "./src/tokens";
 import type { IntegrityConfig } from "./src/types";
 
 /**
@@ -23,7 +23,12 @@ const config: IntegrityConfig = {
     {
       id: "decide-stays-pure",
       entryPoints: ["src/decide.ts"],
+      // The denylist names the usual suspects by spelling…
       forbidden: FORBIDDEN_NONDETERMINISM,
+      // …and the allowlist refuses every other spelling: `globalThis.Date.now()`,
+      // `Date["now"]()`, an aliased import of an unlisted module. Add what your closure
+      // genuinely needs, one reviewed line at a time.
+      allowed: { ...PURE_SURFACE, externalImports: ["zod"] },
     },
   ],
 

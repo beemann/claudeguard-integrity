@@ -27,9 +27,20 @@ export interface Finding {
  * shape so matching is exact and content-blind: a token is only ever matched
  * against real code nodes, never comments or string literals (build brief §2.6 —
  * why AST, not regex).
+ *
+ * **A denylist matches spellings, not behaviour.** `Date.now` is matched as written;
+ * `globalThis.Date.now`, `Date["now"]`, `const D = Date; D.now()` and a namespace
+ * import of an unlisted module are other spellings of the same thing, and none of
+ * them is in this set. Names, not bindings, are matched, so a local function called
+ * `fetch` is reported too. For a closure whose purity is load-bearing, declare
+ * {@link PurityClosureRule.allowed} as well: an allowlist refuses whatever it does not
+ * name, however it is spelled.
  */
 export interface ForbiddenTokens {
-  /** Exact module specifiers forbidden as an import / re-export / dynamic import. */
+  /**
+   * Exact module specifiers forbidden in any value load — `import`, `export … from`,
+   * `import x = require(…)`, `import(…)`, `require(…)`, `import.meta.require(…)`.
+   */
   readonly imports: readonly string[];
   /**
    * Forbidden import *prefixes* — an import whose specifier starts with any of
@@ -61,6 +72,53 @@ export interface PurityClosureRule {
   /** Repo-relative entry files whose transitive within-repo closure is checked. */
   readonly entryPoints: readonly string[];
   readonly forbidden: ForbiddenTokens;
+  /**
+   * Optional allowlist mode. When present, the closure may reach the host
+   * environment only through what this names; everything else is a finding, however
+   * it is spelled. Held in addition to {@link forbidden}, never instead of it.
+   */
+  readonly allowed?: AllowedSurface;
+  /**
+   * Repo-relative files in which a module load with a COMPUTED specifier is
+   * intended — a program loading its own configuration, a plugin host. Such a load
+   * is still not followed: it is declared here instead of reported, and counted in
+   * the check's `skipped` list, so the report says what the closure does not cover.
+   *
+   * A listed file that holds no computed load is a finding: a stale exception would
+   * pre-authorise the next one, unseen. Only computed loads are covered; a path that
+   * resolves to nothing is never excusable.
+   */
+  readonly computedLoadsAllowedIn?: readonly string[];
+}
+
+/**
+ * What a closure may reach outside its own code, by allowlist (allowlist mode of
+ * {@link PurityClosureRule}).
+ *
+ * A **global** is any name a file uses without declaring it — resolved by the
+ * TypeScript binder, so a local `const fetch = …` is not a global and
+ * `globalThis.fetch` is a use of `globalThis`. `import.meta` counts as a global named
+ * `"import.meta"`.
+ *
+ * Incompleteness here costs precision, never soundness: a pure global missing from
+ * the list is reported until someone adds it, in review. That is the opposite failure
+ * direction from {@link ForbiddenTokens}, where a missing entry is a silent pass.
+ */
+export interface AllowedSurface {
+  /** Globals the closure may use in any position: `Object`, `JSON`, `Map`. */
+  readonly globals: readonly string[];
+  /**
+   * Globals the closure may use ONLY as `Name.member` (or `Name["member"]`) with a
+   * listed member: `{ Math: ["min", "max"] }`. Any other use — an alias, a computed
+   * key, passing `Math` itself — would reach every member, and is a finding.
+   */
+  readonly globalMembers: Readonly<Record<string, readonly string[]>>;
+  /**
+   * Third-party and runtime modules the closure may load, by exact specifier
+   * (`"zod"`, `"node:path"`). They are trusted, not inspected: the walker never reads
+   * them. Path, workspace and `#` specifiers are internal and are walked instead.
+   */
+  readonly externalImports: readonly string[];
 }
 
 /**
@@ -81,15 +139,20 @@ export interface FileInvariantRule {
   /** Repo-relative POSIX path of the file the invariant holds over. */
   readonly file: string;
   /**
-   * Each entry must appear as a substring of at least one literal (string,
-   * template, or numeric) in real code — e.g. a CSP directive, a bind address.
+   * Each entry must appear in at least one literal in real code — e.g. a CSP
+   * directive, a bind address. A string or template literal matches when it
+   * CONTAINS the entry; a numeric literal only when it EQUALS it, so `405` is not
+   * satisfied by `14050`.
    */
   readonly literalsRequired: readonly string[];
-  /** No entry may appear as a substring of any literal — e.g. `<script`. */
+  /** No literal may match an entry, by the same rule — e.g. `<script`. */
   readonly literalsForbidden: readonly string[];
   /**
-   * Member names forbidden in real code, matched as `x.NAME` or `x["NAME"]` — the
-   * shape a DOM/HTML sink takes (e.g. `innerHTML`).
+   * Member names forbidden in real code — the shape a DOM/HTML sink takes (e.g.
+   * `innerHTML`). Matched as `x.NAME`, `x["NAME"]`, `` x[`NAME`] ``, an object-literal
+   * key (`Object.assign(el, { NAME: … })`) and a destructured name
+   * (`const { NAME } = el`). A key computed at run time (`el[k]`, `Reflect.set`) is
+   * not visible to a syntactic check.
    */
   readonly membersForbidden: readonly string[];
 }

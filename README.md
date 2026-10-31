@@ -12,15 +12,47 @@ Three checks, each aimed at a class of defect that survives a green test suite.
 
 ### `purity-closure` — "this code path stays clean, all the way down"
 
-Give it an entry point and a set of forbidden tokens (`Date.now`, `Math.random`,
-`fetch`, an import prefix, …). It walks the **transitive import closure** of that
-entry point and fails if any reachable file references one.
+Give it an entry point. It walks the **transitive import closure** of that entry
+point — every `import`, `export … from`, `import x = require()`, `require()` and
+`import()` — and holds every reachable file to a rule.
 
 The closure is the whole idea. You are not asserting that one file is pure; you are
 asserting that everything it can reach is. Import an impure helper three layers down
-and the check fires, because the helper's tokens are now in the closure. Rules of the
-form *"the enforcement path must never reach the advisory layer"* stop being a
-convention somebody remembers and become a property of the graph.
+and the check fires, because the helper is now in the closure. Rules of the form
+*"the enforcement path must never reach the advisory layer"* stop being a convention
+somebody remembers and become a property of the graph.
+
+A closure that stops early would read exactly like a clean one, so it never does so
+quietly: a path that resolves to nothing, a computed specifier, a `#` subpath import
+or a URL import is a **finding**. A load that is computed on purpose — a program
+loading its own config — is declared in `computedLoadsAllowedIn` and counted in the
+report instead.
+
+The rule comes in two modes, and they fail in opposite directions:
+
+- **Denylist** (`forbidden`) — forbidden tokens: `Date.now`, `Math.random`, `fetch`,
+  a module, an import prefix. It matches **spellings**. `globalThis.Date.now()`,
+  `Date["now"]()` and `const D = Date; D.now()` are other spellings of the first token,
+  and they pass. Whatever the list misses is a silent pass.
+- **Allowlist** (`allowed`) — the globals and third-party modules the closure may
+  reach, everything else refused. Which names are globals is the TypeScript binder's
+  answer, so every spelling above is a use of `Date` or `globalThis`, and a local that
+  shadows a global is not a global. `PURE_SURFACE` is the generic starting point;
+  whatever it misses costs a finding nobody needed, never a silent pass. Granting
+  `globalThis`, `eval` or `Function` is refused.
+
+Use the allowlist for a closure whose purity is load-bearing. Measured against an
+external review's probe of twenty-two spellings of the clock, entropy, I/O and code
+evaluation: the denylist reports 3, the allowlist 22.
+
+**Threat model.** The gate is built against honest drift: the import that seemed
+harmless, the idiom an assistant reached for. It is not a sandbox against someone with
+commit access, who could change the decision itself. Two routes are beyond any static
+check and are not claimed: reflection that never names a global
+(`[].constructor.constructor("…")`), and a method on a value that reads the host
+(`toLocaleString`). A runtime instrument that traps the globals while the code runs
+covers what actually executes; a static one covers what does not run in your tests.
+Use both if the closure is a security boundary.
 
 ### `file-invariants` — "this file keeps the thing that makes it safe"
 
@@ -146,11 +178,16 @@ Start from [`integrity.config.example.ts`](integrity.config.example.ts):
 
 ```ts
 import type { IntegrityConfig } from "./src/types";
-import { FORBIDDEN_NONDETERMINISM } from "./src/tokens";
+import { FORBIDDEN_NONDETERMINISM, PURE_SURFACE } from "./src/tokens";
 
 const config: IntegrityConfig = {
   purityClosures: [
-    { id: "decide-stays-pure", entryPoints: ["src/decide.ts"], forbidden: FORBIDDEN_NONDETERMINISM },
+    {
+      id: "decide-stays-pure",
+      entryPoints: ["src/decide.ts"],
+      forbidden: FORBIDDEN_NONDETERMINISM,
+      allowed: { ...PURE_SURFACE, externalImports: ["zod"] },
+    },
   ],
   fileInvariants: [
     {
@@ -161,7 +198,7 @@ const config: IntegrityConfig = {
       membersForbidden: ["innerHTML"],
     },
   ],
-  sourceEncoding: [{ id: "no-invisible-characters", roots: ["."], extensions: [".ts", ".md"] }],
+  sourceEncoding: [{ id: "no-invisible-characters", roots: ["."] }],
 };
 
 export default config;
@@ -229,11 +266,16 @@ the verdict rather than trusting "OK" on its own.
 
 ## Design rules
 
-1. **Zero false positives.** A gate that cries wolf gets switched off, and a
-   switched-off gate catches nothing. If a check cannot be exact, it does not ship.
-2. **Never silently inert.** An unresolved entry point or a missing root is a
-   *finding*, not a skip. Reporting green because you stopped checking is the worst
-   failure available, since it is indistinguishable from success.
+1. **A finding is never a guess.** It always points at real code that matches the
+   rule as written — never at a comment, a string or a type. A gate that cries wolf
+   gets switched off, and a switched-off gate catches nothing. This rule used to read
+   "zero false positives", and that overclaimed: the denylist matches names, not
+   bindings, so a local function called `fetch` is reported. Rename it, or use the
+   allowlist, which resolves bindings.
+2. **Never silently inert.** An unresolved entry point, a missing root or an import
+   the closure cannot follow is a *finding*, not a skip; a skip that is intended is
+   declared and counted in the report. Reporting green because you stopped checking is
+   the worst failure available, since it is indistinguishable from success.
 3. **Deterministic, offline, read-only.** Same tree plus same config gives the same
    findings on any machine. There is no write path: a gate that can fix what it judges
    is no longer a gate.

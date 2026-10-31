@@ -22,16 +22,23 @@ import type { CheckResult, FileInvariantRule, Finding } from "../types";
  * not the comment, still carries it.
  */
 
+/** One literal in real code. A number is a value, so it is matched whole, never as text. */
+interface Literal {
+  readonly text: string;
+  readonly numeric: boolean;
+  readonly node: ts.Node;
+}
+
 /** Every literal value in real code: string, template text, and numeric. */
-function harvestLiterals(sf: ts.SourceFile): { text: string; node: ts.Node }[] {
-  const out: { text: string; node: ts.Node }[] = [];
+function harvestLiterals(sf: ts.SourceFile): Literal[] {
+  const out: Literal[] = [];
   const visit = (node: ts.Node): void => {
     if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
-      out.push({ text: node.text, node });
+      out.push({ text: node.text, numeric: false, node });
     } else if (ts.isTemplateHead(node) || ts.isTemplateMiddle(node) || ts.isTemplateTail(node)) {
-      out.push({ text: node.text, node });
+      out.push({ text: node.text, numeric: false, node });
     } else if (ts.isNumericLiteral(node)) {
-      out.push({ text: node.text, node });
+      out.push({ text: node.text, numeric: true, node });
     }
     ts.forEachChild(node, visit);
   };
@@ -39,14 +46,55 @@ function harvestLiterals(sf: ts.SourceFile): { text: string; node: ts.Node }[] {
   return out;
 }
 
-/** Every member name referenced as `x.NAME` or `x["NAME"]` in real code. */
+/**
+ * Does `literal` carry `entry`? Text contains it — a CSP directive sits inside a
+ * longer header; a number equals it — `405` is a status, and `14050` is not one.
+ */
+function carries(literal: Literal, entry: string): boolean {
+  return literal.numeric ? literal.text === entry : literal.text.includes(entry);
+}
+
+/** The text of a property name that is written literally, or undefined when computed. */
+function literalName(name: ts.PropertyName | undefined): string | undefined {
+  if (name === undefined) {
+    return undefined;
+  }
+  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) {
+    return name.text;
+  }
+  return undefined;
+}
+
+/**
+ * Every member name referenced in real code: `x.NAME`, `x["NAME"]`, `` x[`NAME`] ``,
+ * an object-literal key (`Object.assign(el, { NAME: … })`, `{ NAME }`) and a
+ * destructured name (`const { NAME } = el`). Each is a way to read or write the
+ * member without spelling `x.NAME`.
+ */
 function harvestMembers(sf: ts.SourceFile): { name: string; node: ts.Node }[] {
   const out: { name: string; node: ts.Node }[] = [];
+  const add = (name: string | undefined, node: ts.Node): void => {
+    if (name !== undefined) {
+      out.push({ name, node });
+    }
+  };
   const visit = (node: ts.Node): void => {
     if (ts.isPropertyAccessExpression(node)) {
-      out.push({ name: node.name.text, node });
-    } else if (ts.isElementAccessExpression(node) && ts.isStringLiteral(node.argumentExpression)) {
-      out.push({ name: node.argumentExpression.text, node });
+      add(node.name.text, node);
+    } else if (
+      ts.isElementAccessExpression(node) &&
+      ts.isStringLiteralLike(node.argumentExpression)
+    ) {
+      add(node.argumentExpression.text, node);
+    } else if (
+      ts.isObjectLiteralElementLike(node) &&
+      !ts.isSpreadAssignment(node) &&
+      ts.isObjectLiteralExpression(node.parent)
+    ) {
+      add(literalName(node.name), node);
+    } else if (ts.isBindingElement(node) && ts.isObjectBindingPattern(node.parent)) {
+      const key = node.propertyName ?? (ts.isIdentifier(node.name) ? node.name : undefined);
+      add(literalName(key), node);
     }
     ts.forEachChild(node, visit);
   };
@@ -83,7 +131,7 @@ export function runFileInvariants(root: string, rule: FileInvariantRule): CheckR
     sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
 
   for (const required of rule.literalsRequired) {
-    if (!literals.some((literal) => literal.text.includes(required))) {
+    if (!literals.some((literal) => carries(literal, required))) {
       findings.push({
         checkId: rule.id,
         file: rule.file,
@@ -98,7 +146,7 @@ export function runFileInvariants(root: string, rule: FileInvariantRule): CheckR
 
   for (const forbidden of rule.literalsForbidden) {
     for (const literal of literals) {
-      if (literal.text.includes(forbidden)) {
+      if (carries(literal, forbidden)) {
         findings.push({
           checkId: rule.id,
           file: rule.file,

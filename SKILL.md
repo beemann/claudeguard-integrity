@@ -67,10 +67,17 @@ A finding names the file, the line, the check and the exact token:
 
 ## The three checks
 
-- **`purity-closure`** — the transitive import closure of an entry point may not
-  reference a forbidden token (`Date.now`, `Math.random`, `fetch`, an import prefix).
-  Because the check *is* the closure, importing an impure module into a pure one
-  drags in its tokens and fires.
+- **`purity-closure`** — the transitive import closure of an entry point is held to
+  a rule. Because the check *is* the closure, importing an impure module into a pure
+  one drags it in and fires. Two modes:
+  - *denylist* (`forbidden`) — forbidden tokens (`Date.now`, `fetch`, a module). It
+    matches **spellings**: `globalThis.Date.now()` is not `Date.now` to it.
+  - *allowlist* (`allowed`) — every global and third-party module the closure uses
+    must be named; the binder decides what is a global, so no spelling escapes it.
+
+  An import the closure cannot follow — a missing path, a computed specifier, a `#`
+  or URL import — is a finding. A declared computed load (`computedLoadsAllowedIn`)
+  shows up in the `not read` list instead: read it as what the closure did not cover.
 - **`file-invariants`** — literals that must exist in one file, literals that must
   never appear, members that must never be referenced. Matched over **AST nodes
   only**, so a comment mentioning the token neither satisfies nor trips it.

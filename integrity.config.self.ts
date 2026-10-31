@@ -60,6 +60,10 @@ const config: IntegrityConfig = {
       id: "engine-determinism",
       entryPoints: ["src/cli.ts", "src/mcp.ts"],
       forbidden: NO_CLOCK_NO_ENTROPY_NO_NETWORK,
+      // Both surfaces import the config they are handed by computed path. It is the
+      // engine's input, not its code, so the closure stops there — declared, counted
+      // in the report, and refused the moment either load disappears.
+      computedLoadsAllowedIn: ["src/cli.ts", "src/mcp.ts"],
     },
   ],
 

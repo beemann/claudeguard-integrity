@@ -4,6 +4,139 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-10-31
+
+An external review named three spellings of the clock that `purity-closure` did not
+see. A probe built from them found twenty-two, and four import forms the closure walk
+dropped without a word. Both are the mistake 0.2.0 removed from `source-encoding`: a
+list standing in for the property it was meant to hold.
+
+### Fixed
+
+- **BREAKING (findings)** — **a closure no longer ends in silence.** The walk
+  followed `import`, `export … from` and string-literal `import()` only. It now also
+  follows `import x = require(…)`, `require(…)`, `import.meta.require(…)` and
+  template-literal `import()`; resolves TypeScript's emitted-extension substitution
+  (`./x.js` → `./x.ts`, `.mjs` → `.mts`, `.cjs` → `.cts`) and the `.mts`, `.cts`,
+  `.js`, `.mjs`, `.cjs` and `index.tsx` candidates; and **reports** every load it
+  cannot follow — a path that resolves to nothing, a computed specifier, a `#`
+  subpath import, a `data:` or `http(s):` URL. Before this, a project on
+  `moduleResolution: "nodenext"`, where every relative import ends in `.js`, had a
+  closure of exactly its entry points, and a green verdict. **Migration:** fix the
+  specifier, or declare an intended computed load with `computedLoadsAllowedIn`.
+- **Every load form is checked against `forbidden.imports`**, where only `import`,
+  `export … from` and literal `import()` were.
+- **A type-only import of a forbidden module is no longer a finding.** It is erased
+  at build; the walk already ignored it as an edge, and the scan now uses the same
+  walk, so there is one definition of a value load instead of two.
+- **`file-invariants`, BREAKING (findings)** — `membersForbidden` also matches a
+  template-literal key, an object-literal key (`Object.assign(el, { innerHTML })`) and
+  a destructured name. A numeric literal now matches an entry only when **equal** to
+  it: `14050` no longer satisfies a required `405`.
+
+### Added
+
+- **Allowlist mode for `purity-closure`** — `allowed: { globals, globalMembers,
+  externalImports }`, held in addition to `forbidden`. Every global the closure uses
+  and every third-party module it loads must be named. "Uses a global" is the
+  TypeScript binder's answer, so an alias, `globalThis.X`, an element access, a
+  destructuring, a `class … extends X`, a shorthand property and a `typeof` probe are
+  each a use of the global they start from, while a local that shadows a global is
+  not. JSX is refused, because its runtime import appears in no source line.
+  Allowances for `globalThis`, `global`, `self`, `window`, `eval` and `Function` are
+  refused as findings, and so is a name allowed both freely and member-restricted.
+  `PURE_SURFACE` ships as the generic starting point. Against the review's probe:
+  **22 of 22** spellings reported, where the denylist reports 3.
+- `computedLoadsAllowedIn` — files whose computed module load is intended (a program
+  loading its own config). The load is counted in the check's `skipped` list instead
+  of reported; a declaration with no such load behind it is a finding.
+- `moduleReferences`, `unfollowedImports`, `isPathSpecifier` and
+  `isExternalSpecifier` are exported.
+
+### Deprecated
+
+- `unresolvedWorkspaceImports` — use `unfollowedImports`; its `reason: "workspace"`
+  subset is the old answer.
+
+### Changed
+
+- **README design rule 1 is restated.** It promised zero false positives, and the
+  denylist matches names, not bindings: a local function called `fetch` is reported.
+  The rule now says what is actually held — a finding always points at real code that
+  matches the rule as written — and the README states the threat model the gate was
+  built for: honest drift, not an adversary with commit access.
+
+### Notes
+
+- Not reachable by any static check, and not claimed: a reflective route that never
+  names a global (`[].constructor.constructor("…")`) and a method on a value that
+  reads the host (`toLocaleString`). A host project can add a runtime instrument for
+  what actually executes; the project this engine came from did.
+- Measured on that project: in allowlist mode its decision-path closure used exactly
+  two globals outside `PURE_SURFACE`, both deliberate and now named in its config.
+  Both surfaces of this engine load their config by computed path, now declared.
+  Closure sizes 12, 12 and 1 files; zero findings; run time within noise of 0.3.0.
+
+### First published here, unrecorded until now
+
+0.3.0 was cut but never published, and two changes from that cycle never reached
+this file. Both ship to the public repository for the first time in 0.4.0.
+
+- **BREAKING (findings)** — **a rule that constrains nothing is never a pass.** A
+  purity closure that forbids nothing (and, from 0.4.0, declares no allowlist), a
+  file invariant that requires and forbids nothing, a source-encoding rule with no
+  roots: each is refused with a finding, decided from the rule's declaration before
+  any file is read. And a check that parsed zero files and found nothing is refused
+  too — an empty scan is never a pass. Measured on the project this engine came
+  from, emptying a rule's token set had reported `OK` at exit 0 over the same file
+  count as a healthy run.
+- **The closure walker is verified over a complete input space.** The traversal
+  (`closureOver`, exported) is a pure function of entry points and an edge reader,
+  checked against an independent breadth-first fixpoint and four closure laws over
+  every directed graph on up to four nodes in the test suite, and over all
+  33 554 432 graphs on five nodes by `bun run bench:closure-laws`. No output
+  contract changed.
+
+## [0.3.0] - 2026-10-07
+
+Two ways a purity closure could end early without saying so. The engine already
+refused an unresolvable **entry point** (0.1.0); it did not refuse an unresolvable
+**edge**, and it resolved package sub-paths against a directory it had guessed.
+
+### Fixed
+
+- **A workspace sub-path now resolves against the package's source root.** The
+  previous derivation was `dirname(dirname(entry))`, which hard-codes "the entry is
+  exactly two levels deep": for an entry at `<pkg>/src/index.ts` it looked for
+  `<pkg>/sub.ts` and never `<pkg>/src/sub.ts` — where a package declaring
+  `exports["."] = "./src/index.ts"` actually keeps its source — and for an entry at
+  `<pkg>/index.ts` it resolved sub-paths against the package's **parent**. Both roots
+  are now derived, the package directory being the nearest ancestor holding a
+  `package.json`, searched no further up than the repo root.
+
+### Added
+
+- **BREAKING (findings)** — an import that names a workspace package but resolves to
+  no file is now **reported**, where it was previously indistinguishable from a
+  third-party import and silently not traversed. `resolveSpecifier` returns
+  `undefined` for both cases, so a closure could end mid-walk while claiming to cover
+  what lay beyond. Under-approximation is the direction that reports green, and this
+  is the same defect as an unresolvable entry point one edge further in, so it gets
+  the same answer. **A consumer whose repository contains such an import will see new
+  findings and a non-zero exit.** That is the bug surfacing, not a new rule: the
+  closure was never covering what it said it covered.
+- `isWorkspaceSpecifier` and `unresolvedWorkspaceImports` are exported, so a host can
+  ask the same question the purity check now asks.
+
+### Notes
+
+- Measured on the project this engine came from: **zero** workspace sub-path imports
+  exist and every package declares only `"."`, so no closure there was being
+  shortened. The branch was dormant — wrong for its first real user rather than wrong
+  today. Closure sizes and findings over that repository are unchanged by this release
+  (12, 10 and 1 files; zero findings).
+
+
 ## [0.2.0] - 2026-09-20
 
 Both halves of `source-encoding` stopped being enumerations. Neither change fixed a

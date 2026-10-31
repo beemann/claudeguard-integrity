@@ -29,5 +29,7 @@
   },
   // `*.ts` picks up the config modules at the package root (`integrity.config.*.ts`).
   // They are shipped examples, so a type error in one is a broken example.
-  "include": ["src/**/*.ts", "test/**/*.ts", "*.ts"]
+  // `scripts/**` holds the law sweeps that are too large for the test suite; they
+  // are the engine's own verification and are type-checked like the rest of it.
+  "include": ["src/**/*.ts", "test/**/*.ts", "scripts/**/*.ts", "*.ts"]
 }

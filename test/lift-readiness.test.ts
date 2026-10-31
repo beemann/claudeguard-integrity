@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, join, resolve, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { describe, expect, test } from "bun:test";
 
 /**
@@ -48,6 +48,33 @@ function specifiers(file: string): string[] {
   return [...text.matchAll(/(?:^|\n)\s*(?:import|export)[^;]*?from\s+["']([^"']+)["']/gu)].map(
     (match) => match[1] ?? "",
   );
+}
+
+/**
+ * This directory's path inside the repository that holds it, found by walking up to
+ * the nearest `.git` — and `""` when the directory IS the repository, standalone or
+ * lifted, where no host path can exist.
+ */
+function hostPrefix(): string {
+  for (let dir = ENGINE_ROOT; ; dir = dirname(dir)) {
+    if (existsSync(join(dir, ".git"))) {
+      return relative(dir, ENGINE_ROOT).split(sep).join("/");
+    }
+    if (dirname(dir) === dir) {
+      return "";
+    }
+  }
+}
+
+/** Every text file in the directory — the whole of it becomes the public repository. */
+function everyTextFile(dir: string = ENGINE_ROOT): string[] {
+  const readable = /\.(?:ts|tsx|md|json|ya?ml)$/u;
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const full = join(dir, entry.name);
+    if (entry.name === "node_modules" || entry.name === ".git") return [];
+    if (entry.isDirectory()) return everyTextFile(full);
+    return entry.isFile() && readable.test(entry.name) ? [full] : [];
+  });
 }
 
 /** Every text file the manifest ships, directories expanded. Excludes `test/`. */
@@ -143,6 +170,26 @@ describe("lift readiness — the folder must move without edits", () => {
       }
     }
     expect(escapes).toEqual([]);
+  });
+
+  test("no file names this directory by its path inside the host repository", () => {
+    // The `../` scan above cannot see this escape: a path written from the host's root
+    // (`<prefix>/src/runner.ts`, resolved against the working directory) resolves only
+    // while the folder sits in that host. Two vacuity tests did exactly that and went
+    // red in the published copy alone. Tests count here — the whole directory is the
+    // public repository, not just what npm would pack.
+    const prefix = hostPrefix();
+    const hits =
+      prefix === ""
+        ? []
+        : everyTextFile().flatMap((file) =>
+            readFileSync(file, "utf8")
+              .split("\n")
+              .flatMap((line, index) =>
+                line.includes(`${prefix}/`) ? [`${file}:${String(index + 1)}`] : [],
+              ),
+          );
+    expect(hits).toEqual([]);
   });
 
   test("the shipped SKILL.md is a usable skill, not just a document", () => {

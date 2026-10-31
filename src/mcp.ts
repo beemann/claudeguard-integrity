@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -39,6 +40,27 @@ import type { IntegrityConfig } from "./types";
  * the same findings, which is the whole reason this sits beside an LLM reviewer
  * rather than inside one.
  */
+
+/**
+ * The engine's version, read from its own manifest rather than written here.
+ *
+ * It used to be the literal `"0.0.0"`, so a client asking this server what it was
+ * talking to got an answer that had never been true. That is worse than cosmetic:
+ * pinning a version is the documented way to tell two cached copies of this engine
+ * apart, and a server that misreports its own version defeats the pin it exists to
+ * serve.
+ *
+ * Resolved relative to this file, so it answers the same inside a host monorepo and
+ * in the lifted standalone repository. `test/version-consistency.test.ts` holds the
+ * remaining manifest to the same number — three hand-kept copies of one version are
+ * an enumeration, and enumerations in this engine have drifted twice (#181, #182).
+ */
+function engineVersion(): string {
+  const manifest = JSON.parse(
+    readFileSync(resolve(import.meta.dir, "..", "package.json"), "utf8"),
+  ) as { version?: string };
+  return manifest.version ?? "0.0.0";
+}
 
 /** What the operator pins when starting the server. Never caller-supplied. */
 export interface ServeOptions {
@@ -90,7 +112,7 @@ export async function serveIntegrity(transport: Transport, options: ServeOptions
   }
 
   const server = new Server(
-    { name: "claudeguard-integrity", version: "0.0.0" },
+    { name: "claudeguard-integrity", version: engineVersion() },
     { capabilities: { tools: {} } },
   );
 

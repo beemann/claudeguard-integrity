@@ -1,6 +1,6 @@
 {
   "name": "@claudeguard/integrity",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -13,7 +13,8 @@
     "mcp": "bun run src/mcp.ts",
     "test": "bun test test/",
     "typecheck": "tsc --noEmit",
-    "check:self": "bun run src/cli.ts --config integrity.config.self.ts --root ."
+    "check:self": "bun run src/cli.ts --config integrity.config.self.ts --root .",
+    "bench:closure-laws": "bun run scripts/closure-laws-exhaustive.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
