@@ -4,6 +4,28 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+No change to what the engine reports; documentation and the engine's own self-check.
+
+### Changed
+
+- **The engine's own determinism check runs in allowlist mode.** The README says a
+  denylist alone is not enough for a closure whose purity is load-bearing, and the
+  self-check was a denylist — `globalThis.Date.now()` in the engine would have passed
+  it. `integrity.config.self.ts` now names everything the engine reaches (measured by
+  running the closure against `PURE_SURFACE` and reading what it refused), and refuses
+  the rest.
+
+### Documentation
+
+- README: install as a Claude Code plugin (marketplace commands and the `settings.json`
+  form), a note on pinning the engine version across a findings-changing update, the
+  allowlist self-check under design rule 3, and the test suites that exist since 0.3.0.
+- CONTRIBUTING: the first two rules as the README now states them; `lift-readiness`
+  described as what it checks — it had claimed a check on host rule names that only a
+  host's private test performs.
+
 ## [0.4.0] - 2026-10-31
 
 An external review named three spellings of the clock that `purity-closure` did not

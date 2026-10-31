@@ -17,9 +17,11 @@ import type { CheckResult, FileInvariantRule, Finding } from "../types";
  * documentation can never stand in for the code (build brief §2.6).
  *
  * Presence checks are coarser than a closure, and deliberately so: they are cheap,
- * zero-FP, and fire on exactly the regression that matters (the header dropped, a
- * sink introduced). They do not prove the header is *correct* — only that the code,
- * not the comment, still carries it.
+ * never fire on a comment, and fire on exactly the regression that matters (the header
+ * dropped, a sink introduced). They do not prove the header is *correct* — only that
+ * the code, not the comment, still carries it. A literal kept alive in an unused
+ * constant satisfies a required entry; a key computed at run time escapes a forbidden
+ * member. Both are syntactic limits, stated rather than hidden.
  */
 
 /** One literal in real code. A number is a value, so it is matched whole, never as text. */

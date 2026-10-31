@@ -9,8 +9,8 @@ import type { AllowedSurface, ForbiddenTokens } from "./types";
  *
  * Content-keyword matching is deliberately out of scope: "must not decide by reading
  * the payload" is a real invariant in some systems, but it is not expressible as a
- * token, and a check that guesses at it would trade the zero-false-positive rule for
- * coverage. Import closure plus these purity tokens are the mechanical core.
+ * token, and a check that guesses at it would break the rule that a finding is never a
+ * guess. Import closure plus these purity tokens are the mechanical core.
  */
 export const FORBIDDEN_NONDETERMINISM: ForbiddenTokens = {
   // I/O module boundaries — a value import of any of these opens a side channel.

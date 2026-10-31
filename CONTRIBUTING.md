@@ -6,13 +6,16 @@ if every test passes.
 
 ## The three rules a change must not break
 
-1. **Zero false positives.** A gate that cries wolf gets switched off, and a switched
-   off gate catches nothing. If a check cannot be exact, it does not ship. "Mostly
-   right" is not a category here.
+1. **A finding is never a guess.** It points at real code that matches the rule as
+   written — never at a comment, a string or a type. A gate that cries wolf gets
+   switched off, and a switched-off gate catches nothing. "Mostly right" is not a
+   category here. (This rule once read "zero false positives"; the denylist matches
+   names, not bindings, so that overclaimed. Say what a rule matches, exactly.)
 2. **Never silently inert.** An unresolved entry point, a missing root, a rule that
-   matched nothing — each is a **finding**, never a skip. The worst failure this tool
-   can have is reporting green because it stopped checking, because that is
-   indistinguishable from success at a glance.
+   matched nothing, an import the closure cannot follow — each is a **finding**, never
+   a skip; a skip that is intended is declared and counted in the report. The worst
+   failure this tool can have is reporting green because it stopped checking, because
+   that is indistinguishable from success at a glance.
 3. **Deterministic, offline, read-only.** No clock, no network, no model, no write
    path. Same tree plus same config must give the same findings on any machine, and a
    gate that can fix what it judges is no longer a gate.
@@ -40,13 +43,20 @@ the time an AST exists the byte is already inside a token.
 bun install
 bun test test/
 bun run src/cli.ts --config integrity.config.self.ts --root .   # the dogfood run
+bun run bench:closure-laws   # on demand: the closure walker over every 5-node graph
 ```
+
+The dogfood run holds the engine's own closure in **allowlist mode**. If your change
+makes the engine reach something new — a module, a global, a member of `process` —
+that run fails, and the fix is a reviewed line in `integrity.config.self.ts` saying
+why, not a workaround.
 
 `test/lift-readiness.test.ts` guards this package's boundary: no import escapes the
 directory, every bare import is a node builtin or a declared dependency, the tsconfig
-inherits nothing, the licence ships, and no host-project rule name or private config
-path appears in anything published. If you add a file that ships, that test is the one
-most likely to tell you something you did not expect.
+inherits nothing, the licence ships, every file the manifest promises exists, no file
+points outside the directory, and none names it by its path inside a host repository.
+Tests count — this whole directory is the repository. If you add a file, that test is
+the one most likely to tell you something you did not expect.
 
 ## Style
 

@@ -258,11 +258,37 @@ startup.
 Both surfaces call the same `run(config, root)` and render through the same
 `report.ts`. A second surface must never become a second opinion.
 
-### Claude Code skill
+### Claude Code plugin
 
-Copy [`SKILL.md`](SKILL.md) into `.claude/skills/claudeguard-integrity/`. It tells the
-agent when to reach for the gate unprompted, and how to read `filesScanned` as part of
-the verdict rather than trusting "OK" on its own.
+This repository is a Claude Code plugin marketplace with one plugin in it. Install it
+from inside Claude Code:
+
+```
+/plugin marketplace add beemann/claudeguard-integrity
+/plugin install claudeguard-integrity@claudeguard-integrity
+```
+
+or declare it in `settings.json`, which is the form to commit for a team:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "claudeguard-integrity": {
+      "source": { "source": "github", "repo": "beemann/claudeguard-integrity" }
+    }
+  },
+  "enabledPlugins": { "claudeguard-integrity@claudeguard-integrity": true }
+}
+```
+
+The plugin carries [`SKILL.md`](SKILL.md), which tells the agent when to reach for the
+gate unprompted and how to read `filesScanned` as part of the verdict rather than
+trusting "OK" on its own. Copying that file into `.claude/skills/claudeguard-integrity/`
+works too, without the plugin.
+
+A plugin update can change which findings your tree produces — 0.4.0 added findings on
+purpose — so if a project pins the engine version, raise the pin deliberately and read
+the new findings rather than letting an update decide.
 
 ## Design rules
 
@@ -281,25 +307,38 @@ the verdict rather than trusting "OK" on its own.
    is no longer a gate.
 
 Rule 3 is **checked, not asserted**. `integrity.config.self.ts` holds an
-`engine-determinism` closure over both entry points, forbidding clocks, entropy,
-network and timers across everything they can reach — file reads stay allowed, because
-reading the tree under judgement is this program's input rather than a side channel.
-Seeding a `Date.now()` three modules deep fails the run. A tool built on the premise
-that invariants must be checked rather than promised has no business holding its own
-as a promise.
+`engine-determinism` closure over both entry points **in allowlist mode**: everything
+the engine reaches outside its own code is named there — the file system, path and URL
+modules, the TypeScript parser, the MCP SDK, the process arguments, working directory
+and exit code, the console, `Buffer.from` and its own `import.meta` — and nothing else
+passes, however it is spelled. No network module, no clock, no entropy, no timer, no
+environment variable. File reads stay allowed, because reading the tree under judgement
+is this program's input rather than a side channel. Seeding a `Date.now()` three
+modules deep fails the run, and so does `globalThis.Date.now()`. A tool built on the
+premise that invariants must be checked rather than promised has no business holding
+its own as a promise — or holding it to the weaker of its own two modes.
 
 ## Tests
 
 ```bash
 bun test test/
 bun run src/cli.ts --config integrity.config.self.ts --root .   # the gate, on itself
+bun run bench:closure-laws   # on demand: all 33 554 432 graphs on five nodes, ~1 min
 ```
 
-The suite includes `test/lift-readiness.test.ts`, which holds this package to being
-self-contained: no source file imports outside the directory, every bare import is a
-node builtin or a *declared* dependency, the tsconfig inherits nothing, and every file
-the manifest promises to ship exists. It is a test rather than a claim precisely
-because that is the kind of property that quietly stops being true.
+`test/purity-closure.test.ts` is the external review's probe kept as a regression
+suite: every spelling of the clock, entropy, I/O and code evaluation it found must be
+reported in allowlist mode, and healthy code must not be. `test/closure-laws.test.ts`
+checks the closure walker against an independent fixpoint over every directed graph on
+up to four nodes; the script above extends that to five.
+
+`test/lift-readiness.test.ts` holds this package to being self-contained: no source
+file imports outside the directory, every bare import is a node builtin or a *declared*
+dependency, the tsconfig inherits nothing, every file the manifest promises to ship
+exists, and no file points outside the directory or names it by its path inside a host
+repository. It is a test rather than a claim precisely because that is the kind of
+property that quietly stops being true — the last check was added after two tests
+passed inside the host and failed in this repository.
 
 ## Not built, deliberately
 
